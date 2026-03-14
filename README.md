@@ -1,132 +1,101 @@
-# Multi-Tenant SaaS API for a Monitoring Service
+# Multi-Tenant SaaS Monitoring API
 
-This project is the core backend for a Software-as-a-Service (SaaS) platform where companies can monitor the uptime and performance of their websites. It's built with Lumen and designed to handle multiple isolated customer organizations from a single codebase.
-
-## Features
-
-The Monitoring Service API provides the following key functionalities:
-
-*   **Multi-tenancy Architecture:** Supports multiple, isolated customer organizations with strict data partitioning.
-*   **User Authentication & Authorization:**
-    *   User registration and login using API tokens.
-    *   Role-Based Access Control (RBAC) with 'admin' and 'member' roles, controlling access to monitor management.
-*   **Monitor Management:** Full CRUD (Create, Read, Update, Delete) operations for website monitors.
-*   **Automated Monitor Checks:**
-    *   Scheduled Artisan command (`monitor:check`) to dispatch jobs for active monitors.
-    *   Asynchronous monitor checks processed via a queue worker.
-*   **Basic Alerting Mechanism:** Logs warning messages when monitors go down or time out, and info messages when they come back up.
-*   **Historical Check Results:** API endpoints to retrieve past check results for any monitor, with filtering and pagination.
-*   **Aggregated Statistics:** API endpoints to provide performance analytics for monitors, such as uptime percentage and average response time over various periods.
-
-## Requirements
-
-*   PHP (>= 8.1)
-*   Composer
-*   SQLite (or any other database supported by Laravel/Lumen)
-
-## Setup Instructions
-
-1.  **Clone the Repository (or create Lumen project):**
-    If you haven't already, create a new Lumen project:
-    ```bash
-    composer create-project --prefer-dist laravel/lumen monitoring-api
-    cd monitoring-api
-    ```
-
-2.  **Configure Environment:**
-    Create a `.env` file from the example:
-    ```bash
-    cp .env.example .env
-    ```
-    Edit your `.env` file. Configure it for SQLite and update the `DB_DATABASE` path to an absolute path on your system. Also, set `QUEUE_CONNECTION` to `database`. For example:
-    ```
-    DB_CONNECTION=sqlite
-    DB_DATABASE=/path/to/your/project/database/database.sqlite
-    DB_FOREIGN_KEYS=true
-
-    QUEUE_CONNECTION=database
-    ```
-    Ensure Eloquent, facades, AppServiceProvider, and AuthServiceProvider are enabled in `bootstrap/app.php`:
-    ```php
-    // In bootstrap/app.php
-    $app->withFacades();
-    $app->withEloquent();
-    $app->register(App\Providers\AppServiceProvider::class);
-    $app->register(App\Providers\AuthServiceProvider::class);
-    $app->configure('queue'); // Ensure queue config is loaded
-    ```
-
-3.  **Create Database File:**
-    ```bash
-    touch database/database.sqlite
-    ```
-
-4.  **Install Dependencies:**
-    ```bash
-    composer install
-    composer require guzzlehttp/guzzle
-    ```
-
-5.  **Run Migrations:**
-    Create the necessary database tables (including `jobs` and `failed_jobs` for the queue):
-    ```bash
-    php artisan migrate
-    ```
-
-## Running the Application
-
-To start the Lumen development server, run the following command from the project root:
-
-```bash
-php -S localhost:8000 -t public
-```
-
-The API will be available at `http://localhost:8000`.
-
-### Running Queue Worker and Scheduler
-
-For monitor checks to run automatically, you need to:
-
-1.  **Start the Queue Worker:** In a separate terminal window (from the project root):
-    ```bash
-    php artisan queue:work
-    ```
-2.  **Configure Scheduler (Crontab):** Add the following entry to your server's crontab to run Lumen's scheduler every minute:
-    ```bash
-    * * * * * cd /path/to/your/project/monitoring-api && php artisan schedule:run >> /dev/null 2>&1
-    ```
-    (Replace `/path/to/your/project/monitoring-api` with the actual absolute path to your project.)
-
-## API Endpoints
-
-Below is a summary of the available API endpoints. Replace `http://localhost:8000` with your server's address.
-
-### Authentication Endpoints (Public):
-
-*   **`POST /register`**
-    *   Registers a new user and creates an organization. First user is 'admin'.
-    *   Request Body: `{ "organization_name": "...", "name": "...", "email": "...", "password": "..." }`
-*   **`POST /login`**
-    *   Authenticates a user and returns a new API token.
-    *   Request Body: `{ "email": "...", "password": "..." }`
-
-### Monitor Endpoints (Authenticated - requires `Authorization: Bearer YOUR_API_TOKEN` header or `?api_token=YOUR_API_TOKEN` query param):
-
-*   **`GET /monitors`**
-    *   List all monitors for the authenticated organization.
-*   **`POST /monitors`**
-    *   Create a new monitor (requires 'admin' role).
-    *   Request Body: `{ "name": "...", "url": "...", "check_interval": (minutes) }`
-*   **`GET /monitors/{id}`**
-    *   Retrieve a specific monitor by ID.
-*   **`PUT /monitors/{id}`**
-    *   Update an existing monitor (requires 'admin' role).
-    *   Request Body: `{ "name": "...", "url": "...", "check_interval": ..., "status": "active|paused" }`
-*   **`DELETE /monitors/{id}`**
-    *   Delete a monitor by ID (requires 'admin' role).
-*   **`GET /monitors/{id}/checks?start_date={...}&end_date={...}&limit={num?}&offset={num?}`**
-    *   Get historical check results for a monitor.
-*   **`GET /monitors/{id}/statistics?period={24h|7d|30d|90d?}`**
-    *   Get aggregated performance statistics for a monitor.
+I built this because I needed a lightweight, self-contained monitoring backend for a SaaS product—no frills, just reliable uptime checks across multiple customer orgs. It runs on Lumen 10.x, uses a single database with row-level tenancy, and handles queuing and scheduling out of the box.
 
 ---
+
+### What It Does
+
+- **Tenants are isolated by `organization_id`**  
+  Every monitor, check result, and user belongs to one org. No cross-org leakage—checks and queries filter by the org from the auth token.
+
+- **Auth with API tokens**  
+  `POST /register` creates a user + org (first user auto-grants admin). Subsequent login (`POST /login`) returns a token used in `Authorization: Bearer` headers. RBAC blocks non-admins from modifying monitors.
+
+- **Monitors get checked on schedule**  
+  - `monitor:check` Artisan command (run via cron or supervisor) fires off jobs  
+  - Queue worker processes checks in the background  
+  - Each check hits the URL with Guzzle, records status (up/down/timeout) and response time, and logs a warning/info message
+
+- **History and stats**  
+  - `/monitors/{id}/checks` returns paginated results with optional date filters  
+  - `/monitors/{id}/statistics` computes uptime % and avg response time for `24h`, `7d`, `30d`, or `90d`
+
+---
+
+### Stack
+
+- PHP 8.1+  
+- Lumen 10.x (with Eloquent, facades, and auth)  
+- SQLite (development) or MySQL/Postgres (prod)  
+- `database` queue connection (jobs table + failed_jobs)  
+
+---
+
+### Setup (90 seconds)
+
+```bash
+# 1. Clone or create project
+git clone https://github.com/you/monitoring-api.git
+cd monitoring-api
+
+# 2. Configure
+cp .env.example .env
+# Edit .env: set DB_DATABASE=/absolute/path/to/database.sqlite
+# and QUEUE_CONNECTION=database
+
+# 3. Enable required services in bootstrap/app.php
+$app->withFacades();
+$app->withEloquent();
+$app->register(App\Providers\AppServiceProvider::class);
+$app->register(App\Providers\AuthServiceProvider::class);
+$app->configure('queue'); // Important
+
+# 4. Init DB and deps
+touch database/database.sqlite
+composer install
+composer require guzzlehttp/guzzle
+
+# 5. Run migrations
+php artisan migrate
+```
+
+---
+
+### Running It
+
+```bash
+# Web server
+php -S localhost:8000 -t public
+
+# Queue worker (in another terminal)
+php artisan queue:work
+
+# Scheduler (add to crontab)
+* * * * * cd /path/to/monitoring-api && php artisan schedule:run >> /dev/null 2>&1
+```
+
+---
+
+### API Summary
+
+| Endpoint | Auth | Role | Description |
+|----------|------|------|-------------|
+| `POST /register` | — | — | Create user + org (first user = admin) |
+| `POST /login` | — | — | Get API token |
+| `GET /monitors` | ✅ | any | List your org’s monitors |
+| `POST /monitors` | ✅ | admin | Create monitor (`{name,url,check_interval}`) |
+| `GET /monitors/{id}` | ✅ | any | Get monitor details |
+| `PUT /monitors/{id}` | ✅ | admin | Update monitor (e.g., pause, rename) |
+| `DELETE /monitors/{id}` | ✅ | admin | Delete monitor |
+| `GET /monitors/{id}/checks` | ✅ | any | Historical checks (supports `?start_date=...&end_date=...&limit=...`) |
+| `GET /monitors/{id}/statistics` | ✅ | any | Stats: `?period=24h|7d|30d|90d` |
+
+---
+
+### Notes
+
+- No rate limiting. Add if you need it.  
+- Logs to `storage/logs/lumen.log`. Warning-level logs fire on failures.  
+- SQLite works fine for dev, but switch to MySQL/Postgres before scaling—this isn’t write-optimized for high concurrency.  
+- `check_interval` is in minutes. Minimum: 1, max: 1440.

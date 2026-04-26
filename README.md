@@ -103,3 +103,15 @@ php artisan queue:work
 ## More from Karelseaat
 
 For more projects and experiments, visit my GitHub Pages site: [karelseaat.github.io](https://karelseaat.github.io/)
+
+<!-- KEEP-EXPLORING-START -->
+## Keep Exploring
+
+If you made it to the bottom, jump straight into a few related repos:
+
+- [Tenant Ops Console](https://github.com/karelseaat/tenant_ops_console)
+- [Laravel Dashboard App](https://github.com/karelseaat/laravel_dashboard_app)
+- [Workflow Case Tracker](https://github.com/karelseaat/workflow_case_tracker)
+
+- [Full project index](https://karelseaat.github.io/)
+<!-- KEEP-EXPLORING-END -->

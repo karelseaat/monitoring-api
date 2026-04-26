@@ -99,3 +99,7 @@ php artisan queue:work
 - Logs to `storage/logs/lumen.log`. Warning-level logs fire on failures.  
 - SQLite works fine for dev, but switch to MySQL/Postgres before scaling—this isn’t write-optimized for high concurrency.  
 - `check_interval` is in minutes. Minimum: 1, max: 1440.
+
+## More from Karelseaat
+
+For more projects and experiments, visit my GitHub Pages site: [karelseaat.github.io](https://karelseaat.github.io/)
